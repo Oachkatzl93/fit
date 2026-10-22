@@ -1,0 +1,12 @@
+Options -Indexes -MultiViews
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+<FilesMatch "^(config(?:\.example)?\.php|schema\.sql|\..*|.*(?:~|\.bak|\.old|\.swp))$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^lib(?:/|$) - [F,END]
+    RewriteRule ^mcp$ mcp.php [END]
+</IfModule>
