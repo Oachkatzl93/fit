@@ -1,6 +1,6 @@
 # intervals.icu Coach auf World4You
 
-Lesender MCP-Server in reinem PHP für einen persönlichen ChatGPT-Coach:
+MCP-Server in reinem PHP für einen persönlichen ChatGPT-Coach, mit standardmäßig lesendem Zugriff und optionaler Bearbeitung geplanter Workouts:
 Garmin → intervals.icu → PHP auf World4You → ChatGPT-Plugin.
 Keine Composer-Abhängigkeiten, keine Datenbank, keine Hintergrundprozesse.
 
@@ -39,7 +39,7 @@ node test/smoke.mjs 'https://<domain>/fit/mcp/<TOKEN>'
 
 Alternativ die URL über die Umgebungsvariable `MCP_URL` übergeben und `node test/smoke.mjs` starten, damit sie nicht als Kommandozeilenargument erscheint. Der Test gibt weder URL noch Trainingsdaten aus. Shell-Verlauf und die Verwaltung der Umgebungsvariable bleiben deine Verantwortung.
 
-Der Test prüft Initialisierung, Benachrichtigung (202 ohne Body), Ping, Tool-Liste, alle fünf Tools, Datumsfehler, falschen Token (404), GET (405), fremden Origin (403) sowie Dateischutz (403). Für `get_activity` nimmt er eine Aktivität der letzten 14 Tage. Falls diese Liste leer ist:
+Der Test prüft Initialisierung, Benachrichtigung (202 ohne Body), Ping, die Tool-Liste samt Schreibannotationen, die fünf bisherigen Datenabrufe, Datumsfehler, falschen Token (404), GET (405), fremden Origin (403) sowie Dateischutz (403). Er führt keine Schreibaktionen aus. Für `get_activity` nimmt er eine Aktivität der letzten 14 Tage. Falls diese Liste leer ist:
 
 ```powershell
 node test/smoke.mjs 'https://<domain>/fit/mcp/<TOKEN>' iDEINE_AKTIVITAETS_ID
@@ -72,7 +72,7 @@ Testfrage: „Was habe ich die letzten sieben Tage trainiert und wie ist meine F
 
 ## Tools und Werte
 
-Alle Tools sind mit `readOnlyHint: true` markiert. Der HTTP-Client führt ausschließlich GET-Aufrufe auf der festen intervals.icu-API aus.
+Lese-Tools sind mit `readOnlyHint: true` markiert. Die vier Schreibtools sind ausdrücklich als schreibend gekennzeichnet und benötigen eine zusätzliche Freigabe. Sie verwalten einzelne geplante WORKOUT-Kalendereinträge und können zusätzlich Wettkämpfe mit A-/B-/C-Priorität anlegen; Aktivitäten, Wellness und Einstellungen werden nicht geändert. Einrichtung: [Kalender bearbeiten](docs/calendar-write.md).
 
 | Tool | Inhalt | Standardzeitraum |
 | --- | --- | --- |
@@ -81,6 +81,11 @@ Alle Tools sind mit `readOnlyHint: true` markiert. Der HTTP-Client führt aussch
 | `get_activity(activity_id)` | Gekürzte Aktivitätsdetails und Intervalle; nur eigener Athlet | – |
 | `get_wellness` | CTL, ATL, absolute Form, HRV, Schlaf, Gewicht, Befinden | Heute und vorherige 13 Tage |
 | `get_calendar` | Geplante Workouts, Wettkämpfe, Notizen | Heute bis heute +14 Tage |
+| `get_calendar_event(event_id)` | Ein Kalenderereignis samt Revision zum Bearbeiten | – |
+| `create_calendar_workout(workout)` | Ein geplantes Workout anlegen, wenn freigegeben | Ab heute |
+| `create_calendar_race(race)` | Einen Wettkampf mit A-/B-/C-Priorität anlegen | Ab heute |
+| `update_calendar_workout(event_id, expected_revision, changes)` | Ein Workout ändern oder verschieben | Ab heute |
+| `delete_calendar_workout(event_id, expected_revision)` | Ein ausdrücklich beauftragtes Workout löschen | Ab heute |
 
 Die drei Listen akzeptieren optionale `oldest`/`newest` im Format `YYYY-MM-DD`, maximal **90 Kalendertage einschließlich beider Grenzen**. Ausgelassene Grenzen behalten ihren jeweiligen Standardwert; für andere Zeiträume am besten beide angeben. Aktivitäten enthalten den gesamten letzten Tag.
 
@@ -94,7 +99,7 @@ Benachrichtigungen erhalten 202 ohne Body. GET und andere HTTP-Methoden erhalten
 
 Requests ohne Origin sind für Server-zu-Server-Aufrufe erlaubt. Wenn ein Origin vorhanden ist, muss er exakt auf der konfigurierten Liste stehen. HTTPS muss durch das Hosting bereitgestellt werden. Antworten werden mit `Cache-Control: no-store` versendet. Der Tokenvergleich erfolgt mit `hash_equals`.
 
-**Wer die URL kennt, kann die Daten lesen.** Die URL nicht teilen oder in Git, Screenshots und öffentliche Plugins übernehmen. Hosting-Access-Logs können Pfad und Query inklusive Token enthalten. Bei Offenlegung `MCP_TOKEN` ändern und die Verbindung in ChatGPT aktualisieren. Der intervals.icu-Key kann weitergehende Rechte besitzen; der PHP-Server begrenzt seine Nutzung auf die hier implementierten Lesezugriffe.
+**Wer die persönliche URL kennt, kann Daten lesen und bei aktiviertem Schreibzugriff geplante Workouts ändern.** Die URL nicht teilen oder in Git, Screenshots und öffentliche Plugins übernehmen. Hosting-Access-Logs können Pfad und Query inklusive Token enthalten. Bei Offenlegung `MCP_TOKEN` ändern und die Verbindung in ChatGPT aktualisieren. Der PHP-Server begrenzt den API-Key auf die hier implementierten Funktionen.
 
 ChatGPT startet kein Gespräch von selbst. Reviews manuell anstoßen. Eine Scheduled Task kann gegebenenfalls erinnern; einen automatischen Zugriff der Task auf dieses Plugin nicht voraussetzen.
 

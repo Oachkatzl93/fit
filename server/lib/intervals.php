@@ -1,12 +1,21 @@
 <?php
 declare(strict_types=1);
 
+final class IntervalsApiException extends RuntimeException
+{
+    public function __construct(public int $httpStatus, string $message)
+    {
+        parent::__construct($message);
+    }
+}
+
 class IntervalsClient
 {
     public function __construct(
         private ?string $apiKey = null,
         private ?string $athlete = null,
-        private ?string $zone = null
+        private ?string $zone = null,
+        private ?bool $calendarWrites = null
     ) {
     }
 
@@ -21,6 +30,36 @@ class IntervalsClient
     }
 
     public function get(string $path, array $query = []): array
+    {
+        return $this->request('GET', $path, $query);
+    }
+
+    public function canWriteCalendar(): bool
+    {
+        return $this->calendarWrites ?? (defined('ENABLE_CALENDAR_WRITES') && ENABLE_CALENDAR_WRITES === true);
+    }
+
+    public function write(string $method, string $path, array $data = [], array $query = []): array
+    {
+        if (!$this->canWriteCalendar()) {
+            throw new RuntimeException('Kalender-Schreibzugriff ist nicht freigegeben. Konfiguration bzw. OAuth-Verbindung mit coach:calendar:write prüfen.');
+        }
+        $base = '/athlete/' . rawurlencode($this->athleteId()) . '/events';
+        $single = (bool) preg_match('~^' . preg_quote($base, '~') . '/[1-9][0-9]{0,9}$~D', $path);
+        if (!(($method === 'POST' && $path === $base) || (in_array($method, ['PUT', 'DELETE'], true) && $single))) {
+            throw new InvalidArgumentException('Nur einzelne geplante Kalender-Workouts und Wettkämpfe dürfen geschrieben werden.');
+        }
+        if ($method === 'DELETE') {
+            $query = ['others' => 'false'];
+        } elseif ($method === 'POST') {
+            $query = ['upsertOnUid' => 'false'];
+        } else {
+            $query = [];
+        }
+        return $this->request($method, $path, $query, $data);
+    }
+
+    protected function request(string $method, string $path, array $query = [], array $data = []): array
     {
         $url = 'https://intervals.icu/api/v1' . $path;
         if ($query !== []) {
@@ -40,21 +79,33 @@ class IntervalsClient
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ]);
+        if ($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+            if ($method !== 'DELETE') {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_THROW_ON_ERROR));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/json', 'Content-Type: application/json']);
+            }
+        }
         $body = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         // Keine fremden Fehlertexte, URLs oder Credentials zurückgeben.
         if ($body === false) {
-            throw new RuntimeException('intervals.icu ist nicht erreichbar oder hat das Zeitlimit überschritten.');
+            throw new RuntimeException($method === 'GET'
+                ? 'intervals.icu ist nicht erreichbar oder hat das Zeitlimit überschritten.'
+                : 'Schreibergebnis unklar (Verbindung/Zeitlimit). Kalender erneut abrufen; nicht ungeprüft wiederholen.');
         }
         if ($status < 200 || $status >= 300) {
             $hint = match ($status) {
                 401, 403 => 'API-Key oder Zugriffsrechte prüfen.',
-                404 => 'Athlet oder Aktivität nicht gefunden.',
+                404 => 'Athlet, Aktivität oder Kalenderereignis nicht gefunden.',
                 429 => 'Zu viele Anfragen; später erneut versuchen.',
                 default => 'Bitte später erneut versuchen.',
             };
-            throw new RuntimeException("intervals.icu HTTP $status: $hint");
+            throw new IntervalsApiException($status, "intervals.icu HTTP $status: $hint" . ($method !== 'GET' && $status >= 500 ? ' Schreibergebnis unklar; Kalender vor Wiederholung prüfen.' : ''));
+        }
+        if ($method !== 'GET' && trim($body) === '') {
+            return [];
         }
         try {
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);

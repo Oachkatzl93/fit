@@ -6,10 +6,10 @@ Die separate Mehrbenutzer-Version liegt unter `server/multi/`. Sie ist lokal mit
 
 1. Nutzer installieren den freigegebenen Coach und klicken auf **Verbinden**.
 2. ChatGPT öffnet eine Anmeldemaske auf deinem HTTPS-Server.
-3. Der Nutzer gibt seinen intervals.icu-API-Key ein und stimmt der Speicherung und dem Lesezugriff zu.
+3. Der Nutzer gibt seinen intervals.icu-API-Key ein und stimmt der Speicherung sowie den angeforderten Rechten zu. Kalenderänderungen benötigen eine gesondert angeforderte Schreibberechtigung.
 4. PHP fragt mit diesem Key `/athlete/0` ab. Die zurückgegebene Athlete-ID muss in deiner Freigabeliste stehen.
 5. Der Key wird mit AES-256-GCM verschlüsselt gespeichert und an die bestätigte Athlete-ID gebunden. ChatGPT erhält einen eigenen kurzlebigen Coach-Zugang, keinen intervals.icu-Key.
-6. Alle fünf Tools verwenden ausschließlich das bestätigte Konto. Datumsdefaults nutzen dessen Zeitzone.
+6. Alle Tools verwenden ausschließlich das bestätigte Konto. Datumsdefaults nutzen dessen Zeitzone.
 
 ```text
 ChatGPT ── OAuth + PKCE ── PHP auf World4You ── persönlicher API-Key ── intervals.icu
@@ -17,7 +17,7 @@ ChatGPT ── OAuth + PKCE ── PHP auf World4You ── persönlicher API-Ke
 
 Es ist **keine OAuth-App bei intervals.icu und keine Genehmigung dort erforderlich**. OAuth zwischen ChatGPT und deinem PHP-Server ordnet die gemeinsame App den jeweiligen Nutzern zu. Diese Version verwendet einen fest konfigurierten ChatGPT-OAuth-Client mit Client-ID und Secret; keine dynamische Client-Registrierung.
 
-Ein intervals.icu-API-Key kann weitergehende Rechte besitzen. Unser Client führt nur GET-Aufrufe für Trainingsdaten aus. Der Betreiber kann die gespeicherten Keys technisch entschlüsseln; die Nutzer müssen diesem Betriebsmodell vertrauen. Keys gehören ausschließlich in die HTTPS-Maske, nicht in Chat-Nachrichten.
+Ein intervals.icu-API-Key kann weitergehende Rechte besitzen. Unser Client liest Trainingsdaten und kann optional einzelne geplante Workouts verwalten. Schreibrechte erfordern Server-Freigabe und `coach:calendar:write` im jeweiligen OAuth-Zugang; alte Lesezugänge bleiben lesend. Siehe [Kalender-Schreibzugriff](calendar-write.md). Der Betreiber kann die gespeicherten Keys technisch entschlüsseln. Keys gehören ausschließlich in die HTTPS-Maske, nicht in Chat-Nachrichten.
 
 ## 1. Datenbank und PHP
 

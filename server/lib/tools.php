@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/calendar.php';
+
 function tool_definitions(bool $authenticated = false): array
 {
     $date = ['type' => 'string', 'format' => 'date', 'pattern' => '^\\d{4}-\\d{2}-\\d{2}$'];
@@ -12,15 +14,18 @@ function tool_definitions(bool $authenticated = false): array
         ['get_wellness', 'Fitness CTL, Ermüdung ATL, Form CTL minus ATL (absolut), HRV, Ruhepuls, Schlaf und Gewicht. Standard: letzte 14 Tage; inklusiv max. 90 Tage. sleepSecs Sekunden, Gewicht kg, HRV ms.', $range],
         ['get_calendar', 'Kalender mit geplanten Workouts, Wettkämpfen und Notizen. Standard: heute bis heute +14 Tage; inklusiv max. 90 Tage.', $range],
     ];
-    return array_map(static fn(array $d): array => [
+    return array_merge(array_map(static fn(array $d): array => [
         'name' => $d[0], 'description' => $d[1], 'inputSchema' => $d[2],
         'annotations' => ['readOnlyHint' => true, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => true],
         ...($authenticated ? ['securitySchemes' => [['type' => 'oauth2', 'scopes' => ['coach:read']]]] : []),
-    ], $definitions);
+    ], $definitions), calendar_tool_definitions($authenticated));
 }
 
 function call_tool(string $name, array $args, IntervalsClient $client): array
 {
+    if (in_array($name, array_column(calendar_tool_definitions(false), 'name'), true)) {
+        return call_calendar_tool($name, $args, $client);
+    }
     $allowed = match ($name) {
         'get_athlete_profile' => [],
         'get_activity' => ['activity_id'],

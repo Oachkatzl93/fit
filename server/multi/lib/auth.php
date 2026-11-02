@@ -31,8 +31,8 @@ function account_allowed(string $id, array $config): bool
 function requested_scope(string $scope): string
 {
     $parts = array_values(array_unique(explode(' ', trim($scope))));
-    if (!in_array('coach:read', $parts, true) || array_diff($parts, ['coach:read', 'offline_access']) !== []) {
-        throw new OAuthFailure('invalid_scope', 'Erforderlicher Scope: coach:read; optional offline_access.');
+    if (!in_array('coach:read', $parts, true) || array_diff($parts, ['coach:read', 'coach:calendar:write', 'offline_access']) !== []) {
+        throw new OAuthFailure('invalid_scope', 'Erforderlich: coach:read; optional coach:calendar:write und offline_access.');
     }
     sort($parts);
     return implode(' ', $parts);
@@ -60,9 +60,13 @@ function authorization_request(array $input, array $config): array
     if (isset($input['code_challenge']) && array_key_exists('request_uri', $input)) {
         throw new OAuthFailure('invalid_request', 'Request-URI wird nicht unterstützt.');
     }
+    $scope = requested_scope($input['scope'] ?? 'coach:read');
+    if (in_array('coach:calendar:write', explode(' ', $scope), true) && ($config['enable_calendar_writes'] ?? false) !== true) {
+        throw new OAuthFailure('invalid_scope', 'Kalender-Schreibzugriff ist auf diesem Server nicht aktiviert.');
+    }
     return [
         'client_id' => $config['client_id'], 'redirect_uri' => $redirect,
-        'resource' => $input['resource'], 'scope' => requested_scope($input['scope'] ?? 'coach:read'),
+        'resource' => $input['resource'], 'scope' => $scope,
         'challenge' => $input['code_challenge'], 'state' => $input['state'],
     ];
 }
@@ -284,7 +288,7 @@ final class CoachAuth
         } catch (OAuthFailure $e) {
             throw new OAuthFailure('invalid_token', 'Verbindung wurde entfernt oder gesperrt.', 401);
         }
-        return ['athlete_id' => $account['id'], 'api_key' => $this->decrypt($account['api_key'], $account['id']), 'timezone' => $account['timezone']];
+        return ['athlete_id' => $account['id'], 'api_key' => $this->decrypt($account['api_key'], $account['id']), 'timezone' => $account['timezone'], 'scope' => $row['scope']];
     }
 
     public function revoke(string $token): void

@@ -16,6 +16,8 @@ return [
     'redirect_uris' => [],
     // Nur diese Konten erhalten Zugang. Tatsächliche IDs eintragen, niemals 0.
     'allowed_athletes' => ['i12345', 'i67890'],
+    // Zusätzlich pro Verbindung coach:calendar:write anfordern und erneut zustimmen.
+    'enable_calendar_writes' => false,
     'allowed_origins' => ['https://chatgpt.com'],
     // Optional: sichere HTTPS-Adresse mit deinen Betreiber-/Datenschutzinformationen.
     'privacy_url' => '',

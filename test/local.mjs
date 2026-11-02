@@ -47,7 +47,7 @@ define('MCP_TOKEN', '${'a'.repeat(64)}');
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.protocolVersion, '2025-11-25');
   const listed = await (await send(message('tools/list'))).json();
-  assert.equal(listed.result.tools.length, 5, 'curl-Erweiterung muss geladen sein');
+  assert.equal(listed.result.tools.length, 10, 'curl-Erweiterung muss geladen sein');
   assert.equal((await (await send(message('ping'))).json()).id, 1);
   const notification = await send({ jsonrpc: '2.0', method: 'notifications/initialized' });
   assert.equal(notification.status, 202);

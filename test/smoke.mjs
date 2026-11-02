@@ -67,9 +67,9 @@ try {
   assert.equal(await notification.text(), '');
   await rpc('ping');
   const { tools } = await rpc('tools/list');
-  const names = ['get_athlete_profile', 'list_activities', 'get_activity', 'get_wellness', 'get_calendar'];
+  const names = ['get_athlete_profile', 'list_activities', 'get_activity', 'get_wellness', 'get_calendar', 'get_calendar_event', 'create_calendar_workout', 'create_calendar_race', 'update_calendar_workout', 'delete_calendar_workout'];
   assert.deepEqual(tools.map(t => t.name).sort(), [...names].sort());
-  for (const t of tools) assert.equal(t.annotations.readOnlyHint, true);
+  for (const t of tools) assert.equal(t.annotations.readOnlyHint, !['create_calendar_workout', 'create_calendar_race', 'update_calendar_workout', 'delete_calendar_workout'].includes(t.name));
   console.log('OK tools/list, ping, initialized');
   const profile = await tool('get_athlete_profile');
   assert(profile.id, 'Profil ohne Athlete-ID');

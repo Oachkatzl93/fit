@@ -31,7 +31,7 @@ try {
     'db_user'=>'','db_password'=>'','encryption_key'=>'${'ab'.repeat(32)}',
     'client_id'=>'coach-chatgpt','client_secret'=>'${clientSecret}',
     'redirect_uris'=>['https://chatgpt.example/callback'],
-    'allowed_athletes'=>['i101','i202'], 'allowed_origins'=>['https://chatgpt.com']
+    'allowed_athletes'=>['i101','i202'], 'allowed_origins'=>['https://chatgpt.com'], 'enable_calendar_writes'=>true
   ];`;
   await writeFile(join(docroot, 'multi/config.php'), configText);
   // Nur die temporäre Kopie erhält eine Fixture. Produktionscode hat keinen Test-Schalter.
@@ -47,7 +47,23 @@ try {
       if ($path === '/athlete/0' || $path === '/athlete/' . $owner) {
         return ['id'=>$owner, 'timezone'=>'Europe/Vienna', 'sportSettings'=>[], 'icu_api_key'=>'PRIVATE-KEY'];
       }
+      if (preg_match('~^/athlete/' . $owner . '/events/[0-9]+$~D', $path)) {
+        $file = ${JSON.stringify(join(temporary, 'calendar-').replaceAll('\\', '/'))} . $owner . '.json';
+        if (!is_file($file)) { throw new IntervalsApiException(404, 'fixture missing'); }
+        return json_decode(file_get_contents($file), true);
+      }
       throw new RuntimeException('Fixture: unexpected path');
+  `);
+  const writeMarker = 'protected function request(string $method, string $path, array $query = [], array $data = []): array\n    {';
+  assert(source.includes(writeMarker));
+  source = source.replace(writeMarker, writeMarker + `
+      $owner = $this->athleteId();
+      $file = ${JSON.stringify(join(temporary, 'calendar-').replaceAll('\\', '/'))} . $owner . '.json';
+      if ($method === 'POST') { $event = ['id'=>100, 'athlete_id'=>$owner] + $data; }
+      elseif ($method === 'PUT') { $event = array_replace(json_decode(file_get_contents($file), true), $data); }
+      elseif ($method === 'DELETE') { unlink($file); return []; }
+      else { throw new RuntimeException('Fixture: unexpected transport'); }
+      file_put_contents($file, json_encode($event)); return $event;
   `);
   await writeFile(clientPath, source);
   const router = join(temporary, 'router.php');
@@ -119,12 +135,14 @@ try {
   }
   for (const [connection, id] of [[a, 'i101'], [b, 'i202']]) {
     const tools = await (await rpc(connection.tokens, 'tools/list')).json();
-    assert.equal(tools.result.tools.length, 5);
+    assert.equal(tools.result.tools.length, 10);
     assert.equal(tools.result.tools[0].securitySchemes[0].type, 'oauth2');
     const result = await (await rpc(connection.tokens, 'tools/call', { name: 'get_athlete_profile', arguments: {} })).json();
     const text = result.result.content[0].text;
     assert.equal(JSON.parse(text).id, id);
     assert(!text.includes('PRIVATE-KEY'));
+    const deniedWrite = await (await rpc(connection.tokens, 'tools/call', { name: 'create_calendar_workout', arguments: { workout: { name: 'Test', type: 'Run', description: 'Test', start_date_local: '2030-01-01T09:00:00' } } })).json();
+    assert.equal(deniedWrite.result.isError, true, 'Leseverbindung darf nicht schreiben');
   }
   const refresh = await form('token.php', {
     grant_type: 'refresh_token', refresh_token: a.tokens.refresh_token,
@@ -143,9 +161,26 @@ try {
   assert.equal(removed.status, 200);
   assert((await removed.text()).includes('wurden entfernt'));
   assert.equal((await rpc(b.tokens, 'tools/list')).status, 401);
+  authParams.set('scope', 'coach:read coach:calendar:write offline_access');
+  const writable = await connect('fixture-user-a-key');
+  const parseTool = async (name, args) => {
+    const result = await (await rpc(writable.tokens, 'tools/call', { name, arguments: args })).json();
+    assert.equal(result.result.isError, false, name);
+    return JSON.parse(result.result.content[0].text);
+  };
+  const future = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10) + 'T09:00:00';
+  const workout = await parseTool('create_calendar_workout', { workout: { name: 'Fixture workout', type: 'Run', description: '30m easy', start_date_local: future } });
+  assert.equal(workout.event.athlete_id, 'i101');
+  const updated = await parseTool('update_calendar_workout', { event_id: '100', expected_revision: workout.revision, changes: { name: 'Changed fixture' } });
+  assert.equal(updated.event.name, 'Changed fixture');
+  const deleted = await parseTool('delete_calendar_workout', { event_id: '100', expected_revision: updated.revision });
+  assert.equal(deleted.verified_absent, true);
+  const race = await parseTool('create_calendar_race', { race: { name: 'Fixture race', type: 'Run', start_date_local: future, priority: 'B', distance: 21097.5 } });
+  assert.equal(race.event.category, 'RACE_B');
+  assert.equal(race.event.athlete_id, 'i101');
   const deniedOrigin = await fetch(origin + 'metadata.php', { headers: { Origin: 'https://evil.invalid' } });
   assert.equal(deniedOrigin.status, 403);
-  console.log('OK HTTP-Anmeldung mit zwei Konten, CSRF, Callback, PKCE, MCP-Aufrufe, Refresh, Widerruf und Löschen');
+  console.log('OK HTTP-Anmeldung, getrennte Lese-/Schreibrechte, Kalender-Anlage/Änderung/Löschung, CSRF, PKCE, Refresh und Widerruf');
 } finally {
   if (server && server.exitCode === null) {
     const exited = new Promise(resolve => server.once('exit', resolve));

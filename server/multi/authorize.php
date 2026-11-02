@@ -78,6 +78,7 @@ if ($method === 'GET') {
     unset($apiKey, $form, $profile);
 }
 header('Content-Type: text/html; charset=utf-8');
+$writing = in_array('coach:calendar:write', explode(' ', $request['scope']), true);
 ?>
 <!doctype html>
 <html lang="de">
@@ -89,15 +90,15 @@ body{font:17px/1.55 system-ui,sans-serif;background:#f3f5f3;color:#17291f;margin
 </style>
 <main>
 <h1>Deinen Coach verbinden</h1>
-<p>Gib deinen intervals.icu-API-Key ein. Der Coach darf damit deine Trainings, Wellnesswerte, Sporteinstellungen und deinen Kalender lesen.</p>
+<p>Gib deinen intervals.icu-API-Key ein. Der Coach darf damit deine Trainings, Wellnesswerte, Sporteinstellungen und deinen Kalender lesen.<?php if ($writing): ?> Zusätzlich darf er geplante Workouts und Wettkämpfe anlegen sowie geplante Workouts bearbeiten, verschieben und löschen.<?php endif; ?></p>
 <p>Den Key findest du in intervals.icu unter <strong>Settings → Developer Settings</strong>.</p>
 <?php if ($error !== ''): ?><p class="error" role="alert"><?= e($error) ?></p><?php endif; ?>
 <form method="post" action="<?= e($config['base_url'] . '/authorize.php') ?>" autocomplete="off">
 <input type="hidden" name="flow" value="<?= e($flow) ?>">
 <input type="hidden" name="csrf" value="<?= e($_SESSION['flows'][$flow]['csrf']) ?>">
 <label>intervals.icu-API-Key<input type="password" name="api_key" maxlength="512" autocomplete="off" spellcheck="false"></label>
-<label><input type="checkbox" name="consent" value="yes"> Ich erlaube diesem Server, meinen API-Key verschlüsselt zu speichern und meine Daten für den Coach in ChatGPT abzurufen.</label>
-<p><small>Die Freigabe gilt für deine Coach-Verbindung in ChatGPT. Dein API-Key wird nicht an ChatGPT weitergegeben. Der API-Key selbst kann mehr Rechte besitzen; dieser Server führt nur Lesezugriffe auf Trainingsdaten aus. Eine neue Anmeldung ersetzt deine bisherige Coach-Verbindung.</small></p>
+<label><input type="checkbox" name="consent" value="yes"> Ich erlaube die verschlüsselte Speicherung meines API-Keys und den beschriebenen Zugriff auf mein Konto.<?php if ($writing): ?> Das schließt die Anlage von Wettkämpfen sowie die Anlage, Bearbeitung und Löschung geplanter Workouts ein.<?php endif; ?></label>
+<p><small>Die Freigabe gilt für deine Coach-Verbindung in ChatGPT. Dein API-Key wird nicht an ChatGPT weitergegeben. Abgeschlossene Aktivitäten, Wellnesswerte und Sporteinstellungen werden durch diese Schnittstelle nicht verändert. Eine neue Anmeldung ersetzt deine bisherige Coach-Verbindung.</small></p>
 <button name="action" value="connect">Verbinden</button><button name="action" value="cancel">Abbrechen</button>
 </form>
 <p><small>Zum Entfernen der gespeicherten Verbindung kontaktiere den Betreiber. Deinen API-Key kannst du außerdem jederzeit in intervals.icu erneuern.</small></p>

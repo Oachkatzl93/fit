@@ -21,7 +21,9 @@ try {
     multi_json(['error' => 'invalid_token', 'error_description' => 'Bitte Coach verbinden.'], 401);
 }
 $auth->limit('mcp:' . $account['athlete_id'], 120);
-$client = new IntervalsClient($account['api_key'], $account['athlete_id'], $account['timezone']);
+$canWrite = ($config['enable_calendar_writes'] ?? false) === true
+    && in_array('coach:calendar:write', explode(' ', $account['scope']), true);
+$client = new IntervalsClient($account['api_key'], $account['athlete_id'], $account['timezone'], $canWrite);
 unset($account);
 $versions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 if (isset($_SERVER['HTTP_MCP_PROTOCOL_VERSION']) && !in_array($_SERVER['HTTP_MCP_PROTOCOL_VERSION'], $versions, true)) {
